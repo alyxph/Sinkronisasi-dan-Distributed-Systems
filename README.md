@@ -307,8 +307,3 @@ http://localhost:7201/docs   # Swagger UI — Cache Node
 - **[API Specification](docs/api_spec.yaml)** - OpenAPI specification (Swagger) untuk integrasi endpoints.
 - **[Deployment Guide](docs/deployment_guide.md)** - Panduan Docker Compose dan environment var.
 
----
-
-### 📝 Git Commit History
-- **first commit** - Initial project setup dengan implementasi lengkap Distributed Lock Manager, Queue System, Cache System, dan Raft consensus.
-
