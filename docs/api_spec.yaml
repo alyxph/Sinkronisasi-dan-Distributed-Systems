@@ -1,0 +1,198 @@
+openapi: 3.0.3
+info:
+  title: Distributed Synchronization System API
+  version: 1.0.0
+servers:
+  - url: http://localhost:7001
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses:
+        "200":
+          description: Metrics
+  /admin/partition:
+    post:
+      summary: Simulate network partition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                block:
+                  type: array
+                  items:
+                    type: string
+                unblock:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Updated partition state
+  /lock/acquire:
+    post:
+      summary: Acquire a lock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lock, client_id]
+              properties:
+                lock:
+                  type: string
+                client_id:
+                  type: string
+                mode:
+                  type: string
+                  enum: [shared, exclusive]
+                ttl_ms:
+                  type: integer
+      responses:
+        "200":
+          description: Lock status
+  /lock/release:
+    post:
+      summary: Release a lock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lock, client_id]
+              properties:
+                lock:
+                  type: string
+                client_id:
+                  type: string
+      responses:
+        "200":
+          description: Release status
+  /lock/status:
+    get:
+      summary: Lock or request status
+      parameters:
+        - in: query
+          name: request_id
+          schema:
+            type: string
+        - in: query
+          name: lock
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status result
+  /queue/publish:
+    post:
+      summary: Publish a message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue, message]
+              properties:
+                queue:
+                  type: string
+                message:
+                  type: object
+      responses:
+        "200":
+          description: Enqueue result
+  /queue/consume:
+    post:
+      summary: Consume a message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue]
+              properties:
+                queue:
+                  type: string
+      responses:
+        "200":
+          description: Consume result
+  /queue/ack:
+    post:
+      summary: Ack a message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue, message_id]
+              properties:
+                queue:
+                  type: string
+                message_id:
+                  type: string
+      responses:
+        "200":
+          description: Ack result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: acked
+  /cache/get:
+    get:
+      summary: Get cache value
+      parameters:
+        - in: query
+          name: key
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: Cache value
+  /cache/put:
+    post:
+      summary: Put cache value
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+      responses:
+        "200":
+          description: Put result
+  /raft/request_vote:
+    post:
+      summary: Raft RequestVote RPC
+      responses:
+        "200":
+          description: Vote result
+  /raft/append_entries:
+    post:
+      summary: Raft AppendEntries RPC
+      responses:
+        "200":
+          description: Append result

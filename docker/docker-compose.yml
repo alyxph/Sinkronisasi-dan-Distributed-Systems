@@ -1,0 +1,154 @@
+services:
+
+  # ─── Lock Manager Cluster ────────────────────────────────────────────────────
+  lock-1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    environment:
+      NODE_ROLE: lock_manager
+      NODE_ID: lock-1
+      HOST: 0.0.0.0
+      PORT: 7001
+      PEERS: '[{"id":"lock-1","url":"http://lock-1:7001"},{"id":"lock-2","url":"http://lock-2:7001"},{"id":"lock-3","url":"http://lock-3:7001"}]'
+
+  lock-2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    environment:
+      NODE_ROLE: lock_manager
+      NODE_ID: lock-2
+      HOST: 0.0.0.0
+      PORT: 7001
+      PEERS: '[{"id":"lock-1","url":"http://lock-1:7001"},{"id":"lock-2","url":"http://lock-2:7001"},{"id":"lock-3","url":"http://lock-3:7001"}]'
+
+  lock-3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    environment:
+      NODE_ROLE: lock_manager
+      NODE_ID: lock-3
+      HOST: 0.0.0.0
+      PORT: 7001
+      PEERS: '[{"id":"lock-1","url":"http://lock-1:7001"},{"id":"lock-2","url":"http://lock-2:7001"},{"id":"lock-3","url":"http://lock-3:7001"}]'
+
+  nginx-lock:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./nginx-lock.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "7001:7001"
+    depends_on:
+      - lock-1
+      - lock-2
+      - lock-3
+
+  # ─── Queue Cluster ────────────────────────────────────────────────────────────
+  queue-1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    environment:
+      NODE_ROLE: queue_node
+      NODE_ID: queue-1
+      HOST: 0.0.0.0
+      PORT: 7101
+      PEERS: '[{"id":"queue-1","url":"http://queue-1:7101"},{"id":"queue-2","url":"http://queue-2:7101"},{"id":"queue-3","url":"http://queue-3:7101"}]'
+
+  queue-2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    environment:
+      NODE_ROLE: queue_node
+      NODE_ID: queue-2
+      HOST: 0.0.0.0
+      PORT: 7101
+      PEERS: '[{"id":"queue-1","url":"http://queue-1:7101"},{"id":"queue-2","url":"http://queue-2:7101"},{"id":"queue-3","url":"http://queue-3:7101"}]'
+
+  queue-3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    environment:
+      NODE_ROLE: queue_node
+      NODE_ID: queue-3
+      HOST: 0.0.0.0
+      PORT: 7101
+      PEERS: '[{"id":"queue-1","url":"http://queue-1:7101"},{"id":"queue-2","url":"http://queue-2:7101"},{"id":"queue-3","url":"http://queue-3:7101"}]'
+
+  nginx-queue:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./nginx-queue.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "7101:7101"
+    depends_on:
+      - queue-1
+      - queue-2
+      - queue-3
+
+  # ─── Cache Cluster ────────────────────────────────────────────────────────────
+  cache-1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    ports:
+      - "7211:7201"
+    environment:
+      NODE_ROLE: cache_node
+      NODE_ID: cache-1
+      HOST: 0.0.0.0
+      PORT: 7201
+      PEERS: '[{"id":"cache-1","url":"http://cache-1:7201"},{"id":"cache-2","url":"http://cache-2:7201"},{"id":"cache-3","url":"http://cache-3:7201"}]'
+
+  cache-2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    ports:
+      - "7212:7201"
+    environment:
+      NODE_ROLE: cache_node
+      NODE_ID: cache-2
+      HOST: 0.0.0.0
+      PORT: 7201
+      PEERS: '[{"id":"cache-1","url":"http://cache-1:7201"},{"id":"cache-2","url":"http://cache-2:7201"},{"id":"cache-3","url":"http://cache-3:7201"}]'
+
+  cache-3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    restart: unless-stopped
+    ports:
+      - "7213:7201"
+    environment:
+      NODE_ROLE: cache_node
+      NODE_ID: cache-3
+      HOST: 0.0.0.0
+      PORT: 7201
+      PEERS: '[{"id":"cache-1","url":"http://cache-1:7201"},{"id":"cache-2","url":"http://cache-2:7201"},{"id":"cache-3","url":"http://cache-3:7201"}]'
+
+  nginx-cache:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./nginx-cache.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "7201:7201"
+    depends_on:
+      - cache-1
+      - cache-2
+      - cache-3

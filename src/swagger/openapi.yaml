@@ -1,0 +1,712 @@
+openapi: "3.0.3"
+info:
+  title: Distributed Synchronization System API
+  description: |
+    API documentation for the Distributed Synchronization System.
+    This system provides three core services:
+    - **Distributed Lock Manager** — Raft consensus-based distributed lock with deadlock detection
+    - **Distributed Queue** — Consistent-hashing message queue with Write-Ahead Log persistence
+    - **Distributed Cache** — MESI protocol-based cache coherence system
+
+    Each node exposes common health/admin endpoints plus its role-specific endpoints.
+  version: "1.0.0"
+  contact:
+    name: Sistem Parallel dan Terdistribusi
+
+servers:
+  - url: http://localhost:7001
+    description: Lock Manager Node 1
+  - url: http://localhost:7002
+    description: Lock Manager Node 2
+  - url: http://localhost:7003
+    description: Lock Manager Node 3
+  - url: http://localhost:7101
+    description: Queue Node 1
+  - url: http://localhost:7102
+    description: Queue Node 2
+  - url: http://localhost:7103
+    description: Queue Node 3
+  - url: http://localhost:7201
+    description: Cache Node 1
+  - url: http://localhost:7202
+    description: Cache Node 2
+  - url: http://localhost:7203
+    description: Cache Node 3
+
+tags:
+  - name: Common
+    description: Health check, metrics, and admin endpoints (available on all nodes)
+  - name: Lock Manager
+    description: Distributed Lock Manager with Raft consensus
+  - name: Queue
+    description: Distributed Message Queue with consistent hashing
+  - name: Cache
+    description: Distributed Cache with MESI coherence protocol
+
+paths:
+  # ── Common Endpoints ──────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Common]
+      summary: Health check
+      description: Returns the health status of this node including node ID and role.
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Node is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  node_id:
+                    type: string
+                    example: lock-1
+                  role:
+                    type: string
+                    example: lock_manager
+
+  /metrics:
+    get:
+      tags: [Common]
+      summary: Prometheus metrics
+      description: Returns metrics in Prometheus text format.
+      operationId: getMetrics
+      responses:
+        "200":
+          description: Prometheus metrics text
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP queue_publish_total Total published messages
+                  queue_publish_total 42
+
+  /admin/peers:
+    get:
+      tags: [Common]
+      summary: List peers
+      description: Returns list of peer nodes with their alive/dead status from the failure detector.
+      operationId: listPeers
+      responses:
+        "200":
+          description: Peer list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  peers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: lock-2
+                        url:
+                          type: string
+                          example: http://lock-2:7002
+                        alive:
+                          type: boolean
+                          example: true
+
+  /admin/partition:
+    post:
+      tags: [Common]
+      summary: Simulate network partition
+      description: Block or unblock communication to specific peer nodes to simulate network partitions.
+      operationId: simulatePartition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                block:
+                  type: array
+                  items:
+                    type: string
+                  description: List of peer node IDs to block
+                  example: ["lock-2"]
+                unblock:
+                  type: array
+                  items:
+                    type: string
+                  description: List of peer node IDs to unblock
+                  example: ["lock-3"]
+      responses:
+        "200":
+          description: Current blocked peers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked:
+                    type: array
+                    items:
+                      type: string
+                    example: ["lock-2"]
+
+  /admin/state:
+    get:
+      tags: [Common]
+      summary: Node state
+      description: Returns basic state information about this node.
+      operationId: getState
+      responses:
+        "200":
+          description: Node state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  node_id:
+                    type: string
+                    example: lock-1
+                  role:
+                    type: string
+                    example: lock_manager
+
+  # ── Lock Manager Endpoints ────────────────────────────────────────
+  /lock/acquire:
+    post:
+      tags: [Lock Manager]
+      summary: Acquire a lock
+      description: |
+        Request to acquire a distributed lock. Supports both **exclusive** and **shared** modes.
+        If the lock is already held, the request is queued and returns `waiting` status.
+        Uses Raft consensus for replication across the cluster.
+      operationId: acquireLock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lock, client_id]
+              properties:
+                lock:
+                  type: string
+                  description: Name of the lock resource
+                  example: resource-A
+                client_id:
+                  type: string
+                  description: Unique client identifier
+                  example: client-1
+                mode:
+                  type: string
+                  enum: [exclusive, shared]
+                  default: exclusive
+                  description: Lock mode
+                  example: exclusive
+                ttl_ms:
+                  type: integer
+                  description: Time-to-live in milliseconds (optional, auto-expires)
+                  example: 30000
+                request_id:
+                  type: string
+                  description: Optional idempotency key
+      responses:
+        "200":
+          description: Lock acquire result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [granted, waiting, timeout]
+                    example: granted
+                  request_id:
+                    type: string
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  lock:
+                    type: string
+                    example: resource-A
+                  client_id:
+                    type: string
+                    example: client-1
+                  mode:
+                    type: string
+                    example: exclusive
+        "503":
+          description: Commit failed or leader unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /lock/release:
+    post:
+      tags: [Lock Manager]
+      summary: Release a lock
+      description: |
+        Release a held lock. If other clients are waiting in the queue,
+        the lock is automatically granted to the next eligible request.
+      operationId: releaseLock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lock, client_id]
+              properties:
+                lock:
+                  type: string
+                  description: Name of the lock resource
+                  example: resource-A
+                client_id:
+                  type: string
+                  description: Client ID that holds the lock
+                  example: client-1
+      responses:
+        "200":
+          description: Lock released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        "503":
+          description: Commit failed or leader unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /lock/status:
+    get:
+      tags: [Lock Manager]
+      summary: Lock status
+      description: |
+        Query the status of a specific lock or a lock request.
+        Provide either `request_id` or `lock` as a query parameter.
+      operationId: lockStatus
+      parameters:
+        - name: request_id
+          in: query
+          schema:
+            type: string
+          description: Request ID to check
+        - name: lock
+          in: query
+          schema:
+            type: string
+          description: Lock name to inspect (shows holders and queue)
+      responses:
+        "200":
+          description: Lock status
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    title: Lock snapshot
+                    properties:
+                      lock:
+                        type: string
+                      holders:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      queue:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            request_id:
+                              type: string
+                            client_id:
+                              type: string
+                            mode:
+                              type: string
+                            created_at:
+                              type: number
+                  - type: object
+                    title: Request status
+                    properties:
+                      status:
+                        type: string
+                      request_id:
+                        type: string
+                      lock:
+                        type: string
+                      client_id:
+                        type: string
+                      mode:
+                        type: string
+        "400":
+          description: Missing query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /lock/leader:
+    get:
+      tags: [Lock Manager]
+      summary: Get Raft leader
+      description: Returns the current Raft leader node ID.
+      operationId: getLeader
+      responses:
+        "200":
+          description: Leader info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leader_id:
+                    type: string
+                    example: lock-1
+                    nullable: true
+
+  # ── Queue Endpoints ───────────────────────────────────────────────
+  /queue/publish:
+    post:
+      tags: [Queue]
+      summary: Publish a message
+      description: |
+        Publish a message to a named queue. Messages are routed to the
+        owning node via consistent hashing.
+      operationId: publishMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue]
+              properties:
+                queue:
+                  type: string
+                  description: Queue name
+                  example: orders
+                message:
+                  description: Message body (any JSON value)
+                  example: {"order_id": 1, "item": "product-1"}
+                message_id:
+                  type: string
+                  description: Optional message ID for idempotency
+      responses:
+        "200":
+          description: Message enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: enqueued
+                  message_id:
+                    type: string
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+
+  /queue/consume:
+    post:
+      tags: [Queue]
+      summary: Consume a message
+      description: |
+        Consume the next message from a named queue.
+        The message enters a processing state with visibility timeout.
+        Must be acknowledged within the timeout or it will be requeued.
+      operationId: consumeMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue]
+              properties:
+                queue:
+                  type: string
+                  description: Queue name
+                  example: orders
+      responses:
+        "200":
+          description: Message consumed or queue empty
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    title: Message received
+                    properties:
+                      status:
+                        type: string
+                        example: ok
+                      message:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          body:
+                            description: Original message payload
+                          ts:
+                            type: number
+                            description: Timestamp when message was published
+                  - type: object
+                    title: Queue empty
+                    properties:
+                      status:
+                        type: string
+                        example: empty
+
+  /queue/ack:
+    post:
+      tags: [Queue]
+      summary: Acknowledge a message
+      description: |
+        Acknowledge a consumed message, removing it permanently from the queue.
+        Messages that are not acknowledged within the visibility timeout
+        will be automatically requeued.
+      operationId: ackMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue, message_id]
+              properties:
+                queue:
+                  type: string
+                  description: Queue name
+                  example: orders
+                message_id:
+                  type: string
+                  description: ID of the message to acknowledge
+      responses:
+        "200":
+          description: Message acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: acked
+
+  /queue/stats:
+    get:
+      tags: [Queue]
+      summary: Queue statistics
+      description: Returns the number of pending and processing messages in the queue.
+      operationId: queueStats
+      parameters:
+        - name: queue
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Queue name
+      responses:
+        "200":
+          description: Queue stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queue:
+                    type: string
+                    example: orders
+                  pending:
+                    type: integer
+                    example: 10
+                  processing:
+                    type: integer
+                    example: 2
+        "400":
+          description: Missing queue parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Cache Endpoints ───────────────────────────────────────────────
+  /cache/get:
+    get:
+      tags: [Cache]
+      summary: Get cached value
+      description: |
+        is fetched from peer nodes or local memory and stored locally with state **S** (Shared) or **E** (Exclusive).
+      operationId: cacheGet
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Cache key to look up
+      responses:
+        "200":
+          description: Cache hit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    example: username
+                  value:
+                    type: string
+                    example: alice
+                  state:
+                    type: string
+                    enum: [M, E, S, I]
+                    description: "MESI state — M: Modified, E: Exclusive, S: Shared, I: Invalid"
+                    example: S
+        "400":
+          description: Missing key parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Key not found in cache or memory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /cache/put:
+    post:
+      tags: [Cache]
+      summary: Put value into cache
+      description: |
+        Write a value to the distributed cache. The value is cached locally
+        with state **M** (Modified). An invalidation event
+        is broadcast to all other cache nodes via P2P HTTP.
+      operationId: cachePut
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key:
+                  type: string
+                  description: Cache key
+                  example: username
+                value:
+                  type: string
+                  description: Value to store
+                  example: alice
+      responses:
+        "200":
+          description: Value stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  key:
+                    type: string
+                    example: username
+
+  # ── Raft Internal Endpoints (Lock Manager) ────────────────────────
+  /raft/request_vote:
+    post:
+      tags: [Lock Manager]
+      summary: Raft RequestVote RPC (internal)
+      description: Internal Raft consensus protocol endpoint for leader election.
+      operationId: raftRequestVote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                term:
+                  type: integer
+                candidate_id:
+                  type: string
+                last_log_index:
+                  type: integer
+                last_log_term:
+                  type: integer
+      responses:
+        "200":
+          description: Vote response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  term:
+                    type: integer
+                  vote_granted:
+                    type: boolean
+
+  /raft/append_entries:
+    post:
+      tags: [Lock Manager]
+      summary: Raft AppendEntries RPC (internal)
+      description: Internal Raft consensus protocol endpoint for log replication and heartbeats.
+      operationId: raftAppendEntries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                term:
+                  type: integer
+                leader_id:
+                  type: string
+                prev_log_index:
+                  type: integer
+                prev_log_term:
+                  type: integer
+                entries:
+                  type: array
+                  items:
+                    type: object
+                leader_commit:
+                  type: integer
+      responses:
+        "200":
+          description: Append entries response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  term:
+                    type: integer
+                  success:
+                    type: boolean
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: missing_query
