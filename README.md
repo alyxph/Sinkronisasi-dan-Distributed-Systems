@@ -1,6 +1,6 @@
 # Distributed Synchronization System
 
-### 👥 Authors
+### Authors
 - **Nama:** Alief Rachmattul Islam
 - **NIM:** 11231007
 - **Mata Kuliah:** Sistem Paralel dan Terdistribusi
@@ -306,4 +306,9 @@ http://localhost:7201/docs   # Swagger UI — Cache Node
 - **[Architecture Documentation](docs/architecture.md)** - Detail arsitektur sistem full-lokal, P2P WAL, dan Raft.
 - **[API Specification](docs/api_spec.yaml)** - OpenAPI specification (Swagger) untuk integrasi endpoints.
 - **[Deployment Guide](docs/deployment_guide.md)** - Panduan Docker Compose dan environment var.
+
+---
+
+### 📝 Git Commit History
+- **first commit** - Initial project setup dengan implementasi lengkap Distributed Lock Manager, Queue System, Cache System, dan Raft consensus.
 
